@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Recognizer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: black;
+      color: white;
+      font-family: "Segoe UI", sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 3em;
+      font-weight: bold;
+      margin: 30px 0 20px 40px;
+      color: violet;
+    }
+
+    .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 40px;
+      box-sizing: border-box;
+      height: calc(100vh - 70px);
+    }
+
+    .controls {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      padding-left: 20px;
+    }
+
+    .section-title {
+      color: violet;
+      font-size: 1.2em;
+      margin: 25px 0 12px 5px;
+    }
+
+    button {
+      font-size: 1em;
+      font-weight: bold;
+      padding: 10px 20px;
+      margin: 5px 10px 5px 0;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      background: linear-gradient(90deg, #c850c0, #4158d0);
+      color: black;
+    }
+
+    .file-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      margin: 5px 0 0 5px;
+      background: black;
+      color: gray;
+      border-radius: 4px;
+      padding: 5px 35px 5px 8px;
+      font-size: 0.9em;
+      box-sizing: border-box;
+      border: 2px dashed gray;
+    }
+
+    .file-wrapper.has-file {
+      background: white;
+      color: black;
+      border: none;
+    }
+
+    .custom-file {
+      flex-grow: 1;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .clear-btn {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: none;
+      cursor: pointer;
+      font-size: 1em;
+      color: red;
+      background: none;
+      border: none;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .detect-button {
+      background: linear-gradient(90deg, #00dbde, #fc00ff);
+      color: black;
+      font-weight: bold;
+      border-radius: 5px;
+      padding: 6px 16px;
+      font-size: 0.95em;
+      border: none;
+      cursor: pointer;
+      width: fit-content;
+      margin: 8px 0 15px 5px;
+    }
+
+    .video-section {
+      flex-grow: 1;
+      margin-left: 200px;
+      margin-right: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-section h2 {
+      font-size: 1.2em;
+      margin-bottom: 15px;
+    }
+
+    .video-box {
+      width: 900px;
+      height: 450px;
+      background: #222;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .video-box img,
+    .video-box video {
+      width: auto; 
+      height: auto;
+      max-width: 100%;
+      max-height: 100%; 
+      display: none;
+      object-fit: contain;
+    }
+
+    #overlayCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: none;
+    }
+
+    .placeholder {
+      color: gray;
+      position: absolute;
+    }
+
+    #alertMessage {
+      display: block;
+      position: fixed;
+      top: -50px;
+      left: 0;
+      width: 100%;
+      background-color: #ff3e3e;
+      color: white;
+      text-align: center;
+      padding: 12px 0;
+      font-weight: bold;
+      z-index: 1000;
+      font-family: 'Segoe UI', sans-serif;
+      transition: top 0.5s ease;
+    }
+  </style>
+</head>
+<body>
+  <!-- ALERT MESSAGE -->
+  <div id="alertMessage"></div>
+
+  <h1>AI RECOGNITION</h1>
+  <div class="container">
+    <!-- Left panel -->
+    <div class="controls">
+      <!-- Live Webcam -->
+      <div class="section-title">Live Webcam</div>
+      <div style="margin-left:5px;">
+        <button id="startBtn">Start</button>
+        <button id="stopBtn">Stop</button>
+      </div>
+
+      <!-- Recognize from Image -->
+      <div class="section-title">Recognize from Image</div>
+      <div class="file-wrapper" id="imageWrapper">
+        <label class="custom-file">
+          <span id="imageLabel">No image chosen</span>
+          <input type="file" id="imageInput" accept="image/*" hidden />
+        </label>
+        <button class="clear-btn" id="clearImage">❌</button>
+      </div>
+      <button class="detect-button" id="detectImage">Detect</button>
+
+      <!-- Recognize from Video -->
+      <div class="section-title">Recognize from Video</div>
+      <div class="file-wrapper" id="videoWrapper">
+        <label class="custom-file">
+          <span id="videoLabel">No video chosen</span>
+          <input type="file" id="videoInput" accept="video/*" hidden />
+        </label>
+        <button class="clear-btn" id="clearVideo">❌</button>
+      </div>
+      <button class="detect-button" id="detectVideo">Detect</button>
+    </div>
+
+    <!-- Right panel -->
+    <div class="video-section">
+      <h2>AI Detector</h2>
+      <div class="video-box">
+        <span class="placeholder">[ Video & Image will appear here ]</span>
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="overlayCanvas"></canvas>
+        <img id="imagePreview" />
+        <video id="videoPreview" controls></video>
+      </div>
+    </div>
+  </div>
+
+<script>
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const webcam = document.getElementById("webcam");
+const overlayCanvas = document.getElementById("overlayCanvas");
+const ctx = overlayCanvas.getContext("2d");
+const placeholder = document.querySelector(".placeholder");
+
+const imageInput = document.getElementById("imageInput");
+const videoInput = document.getElementById("videoInput");
+const imagePreview = document.getElementById("imagePreview");
+const videoPreview = document.getElementById("videoPreview");
+
+let liveStream = null;
+let isWebcamRunning = false;
+let trackedFaces = [];
+let faceClasses = {}; // store unknown face classes for video
+let faceCounter = 1;  // counter for Person IDs
+
+// ---------- Alert ----------
+function showAlert(msg){
+  const alertDiv = document.getElementById("alertMessage");
+  alertDiv.textContent = msg;
+  alertDiv.style.top = "0";
+  setTimeout(()=>{ alertDiv.style.top="-50px"; }, 3000);
+}
+
+// ---------- Assign Classes (for video unknowns) ----------
+function assignClassToFace(face){
+  // key heuristic: quantize position + size
+  const key = `${Math.round(face.x/25)}-${Math.round(face.y/25)}-${Math.round(face.w/25)}-${Math.round(face.h/25)}`;
+  if(faceClasses[key]) {
+    return faceClasses[key];
+  } else {
+    const newClass = "Person " + faceCounter++;
+    faceClasses[key] = newClass;
+    return newClass;
+  }
+}
+
+// ---------- Draw bounding boxes ----------
+function drawBoxes(faces, isVideo=false){
+  ctx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
+
+  faces.forEach(face=>{
+    let {x,y,w,h,name,confidence} = face;
+    let displayName = name;
+
+    // Strict "Unknown" fallback
+    if(!name || name==="Unknown" || (confidence !== undefined && confidence < 0.7)){
+      displayName = "Unknown";
+    }
+
+    // In video mode: assign stable Person IDs for unknowns
+    if(isVideo && displayName === "Unknown"){
+      displayName = assignClassToFace(face);
+    }
+
+    ctx.strokeStyle = (displayName==="Unknown" || displayName.startsWith("Person")) ? "#FF3B30" : "#00FF00";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.font = "18px 'Segoe UI'";
+    ctx.fillText(displayName, x, y > 20 ? y-5 : y+20);
+  });
+}
+
+// ---------- Send image to backend ----------
+async function sendImageToBackend(file){
+  const formData = new FormData();
+  formData.append("image", file);
+  try {
+    const res = await fetch("/recognize", { method: "POST", body: formData });
+    const data = await res.json();
+    return data.faces || [];
+  } catch(err) {
+    showAlert("Backend error: " + err.message);
+    return [];
+  }
+}
+
+// ---------- Webcam Detection ----------
+startBtn.addEventListener("click", async () => {
+  if(imageInput.files.length>0 || videoInput.files.length>0){
+    showAlert("Remove uploaded files before starting webcam!");
+    return;
+  }
+
+  try {
+    liveStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    webcam.srcObject = liveStream;
+    webcam.style.display = "block";
+    placeholder.style.display = "none";
+
+    overlayCanvas.width = webcam.videoWidth || 640;
+    overlayCanvas.height = webcam.videoHeight || 480;
+    overlayCanvas.style.display = "block";
+
+    isWebcamRunning = true;
+
+    const processWebcam = async () => {
+      if(!isWebcamRunning) return;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = webcam.videoWidth;
+      canvas.height = webcam.videoHeight;
+      canvas.getContext("2d").drawImage(webcam,0,0);
+
+      const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg"));
+      const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
+
+      trackedFaces = faces.length>0 ? faces : trackedFaces;
+      drawBoxes(trackedFaces, false); // webcam normal labels
+
+      requestAnimationFrame(processWebcam);
+    };
+    requestAnimationFrame(processWebcam);
+  } catch(err){
+    showAlert("Could not access webcam: " + err.message);
+  }
+});
+
+stopBtn.addEventListener("click", () => {
+  if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
+  webcam.srcObject = null;
+  webcam.style.display = "none";
+  overlayCanvas.style.display = "none";
+  placeholder.style.display = "block";
+  ctx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
+  trackedFaces = [];
+  faceClasses = {};
+  faceCounter = 1;
+  isWebcamRunning = false;
+});
+
+// ---------- File Input Handling ----------
+function setupFileInput(inputId,labelId,clearBtnId,fileType){
+  const input = document.getElementById(inputId);
+  const label = document.getElementById(labelId);
+  const clearBtn = document.getElementById(clearBtnId);
+
+  input.addEventListener("change", ()=>{
+    if(isWebcamRunning){ showAlert("Stop webcam first!"); input.value=""; return; }
+    if(input.files.length>0){ label.textContent = input.files[0].name; clearBtn.style.display="inline"; }
+    else{ label.textContent=`No ${fileType} chosen`; clearBtn.style.display="none"; }
+  });
+
+  clearBtn.addEventListener("click", ()=>{
+    input.value="";
+    label.textContent=`No ${fileType} chosen`;
+    clearBtn.style.display="none";
+    overlayCanvas.style.display="none";
+    if(inputId==="imageInput"){ imagePreview.src=""; imagePreview.style.display="none"; placeholder.style.display="block"; }
+    else if(inputId==="videoInput"){ videoPreview.src=""; videoPreview.style.display="none"; placeholder.style.display="block"; }
+  });
+}
+setupFileInput("imageInput","imageLabel","clearImage","image");
+setupFileInput("videoInput","videoLabel","clearVideo","video");
+
+// ---------- Detect Image ----------
+document.getElementById("detectImage").addEventListener("click", async () => {
+  if(isWebcamRunning){ showAlert("Stop webcam first!"); return; }
+  if(imageInput.files.length===0){ showAlert("Upload image first!"); return; }
+
+  imagePreview.src = URL.createObjectURL(imageInput.files[0]);
+  imagePreview.style.display = "block";
+  videoPreview.style.display = "none";
+  placeholder.style.display = "none";
+
+  imagePreview.onload = async ()=>{
+    overlayCanvas.width = imagePreview.naturalWidth;
+    overlayCanvas.height = imagePreview.naturalHeight;
+    overlayCanvas.style.display = "block";
+
+    const canvas = document.createElement("canvas");
+    canvas.width = imagePreview.naturalWidth;
+    canvas.height = imagePreview.naturalHeight;
+    canvas.getContext("2d").drawImage(imagePreview,0,0);
+
+    const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg"));
+    const faces = await sendImageToBackend(new File([blob],"image.jpg",{type:"image/jpeg"}));
+
+    // Strict known/unknown handling
+    trackedFaces = faces.map(f => {
+      if(!f.name || f.name==="Unknown" || (f.confidence !== undefined && f.confidence < 0.7)){
+        f.name = "Unknown";
+      }
+      return f;
+    });
+
+    drawBoxes(trackedFaces, false); // image mode
+  };
+});
+
+// ---------- Detect Video ----------
+document.getElementById("detectVideo").addEventListener("click", async ()=>{
+  if(isWebcamRunning){ showAlert("Stop webcam first!"); return; }
+  if(videoInput.files.length===0){ showAlert("Upload video first!"); return; }
+
+  videoPreview.src = URL.createObjectURL(videoInput.files[0]);
+  videoPreview.style.display = "block";
+  videoPreview.play();
+  imagePreview.style.display = "none";
+  placeholder.style.display = "none";
+
+  videoPreview.onloadedmetadata = () => {
+    overlayCanvas.width = videoPreview.videoWidth;
+    overlayCanvas.height = videoPreview.videoHeight;
+    overlayCanvas.style.display = "block";
+  }
+
+  const processVideoFrame = async ()=>{
+    if(videoPreview.paused || videoPreview.ended) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = videoPreview.videoWidth;
+    canvas.height = videoPreview.videoHeight;
+    canvas.getContext("2d").drawImage(videoPreview,0,0);
+
+    const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg"));
+    const faces = await sendImageToBackend(new File([blob],"frame.jpg",{type:"image/jpeg"}));
+
+    // Known stay known; unknowns = Person IDs
+    trackedFaces = faces.map(f => {
+      if(!f.name || f.name==="Unknown" || (f.confidence !== undefined && f.confidence < 0.7)){
+        f.name = "Unknown";
+      }
+      return f;
+    });
+
+    drawBoxes(trackedFaces, true); // video mode
+    requestAnimationFrame(processVideoFrame);
+  };
+  videoPreview.addEventListener("play", ()=>requestAnimationFrame(processVideoFrame));
+});
+</script>
+
+</body>
+</html>
