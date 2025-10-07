@@ -311,7 +311,8 @@ async function sendImageToBackend(file){
   }
 }
 
-// ---------- Webcam Detection ----------
+// ---------- Webcam Detection ----------//
+
 startBtn.addEventListener("click", async () => {
   if(imageInput.files.length>0 || videoInput.files.length>0){
     showAlert("Remove uploaded files before starting webcam!");
@@ -324,14 +325,24 @@ startBtn.addEventListener("click", async () => {
     webcam.style.display = "block";
     placeholder.style.display = "none";
 
-    overlayCanvas.width = webcam.videoWidth || 640;
-    overlayCanvas.height = webcam.videoHeight || 480;
-    overlayCanvas.style.display = "block";
+    // Wait for metadata so we have correct dimensions
+    webcam.onloadedmetadata = () => {
+      // Set overlay canvas size to match the actual video dimensions
+      overlayCanvas.width = webcam.videoWidth || 640;
+      overlayCanvas.height = webcam.videoHeight || 480;
+      overlayCanvas.style.display = "block";
+    };
 
     isWebcamRunning = true;
 
     const processWebcam = async () => {
       if(!isWebcamRunning) return;
+
+      // If video dimensions still not available, try again next frame
+      if (webcam.videoWidth === 0 || webcam.videoHeight === 0) {
+        requestAnimationFrame(processWebcam);
+        return;
+      }
 
       const canvas = document.createElement("canvas");
       canvas.width = webcam.videoWidth;
@@ -341,8 +352,9 @@ startBtn.addEventListener("click", async () => {
       const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg"));
       const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
 
+      // Use returned faces; draw in video mode (assign stable Person N IDs for unknowns)
       trackedFaces = faces.length>0 ? faces : trackedFaces;
-      drawBoxes(trackedFaces, false); // webcam normal labels
+      drawBoxes(trackedFaces, true); // video mode
 
       requestAnimationFrame(processWebcam);
     };
@@ -351,6 +363,7 @@ startBtn.addEventListener("click", async () => {
     showAlert("Could not access webcam: " + err.message);
   }
 });
+
 
 stopBtn.addEventListener("click", () => {
   if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
