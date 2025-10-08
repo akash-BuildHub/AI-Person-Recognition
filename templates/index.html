@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AI Recognizer</title>
+  <title>AI Live Face Recognition</title>
   <style>
     html, body {
       margin: 0;
@@ -13,63 +13,45 @@
       height: 100vh;
       overflow: hidden;
     }
-
     h1 {
       font-size: 3em;
       font-weight: bold;
       margin: 30px 0 20px 40px;
       color: violet;
     }
-
     .container {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: flex-start;
       padding: 20px 40px;
       box-sizing: border-box;
       height: calc(100vh - 70px);
     }
-
     .controls {
-      width: 260px;
+      width: 200px;
       display: flex;
       flex-direction: column;
       padding-left: 20px;
     }
-
-    .section-title {
-      color: violet;
-      font-size: 1.2em;
-      margin: 25px 0 12px 5px;
-    }
-
     button {
       font-size: 1em;
       font-weight: bold;
       padding: 10px 20px;
-      margin: 5px 10px 5px 0;
+      margin: 5px 0;
       border: none;
       cursor: pointer;
       border-radius: 5px;
       background: linear-gradient(90deg, #c850c0, #4158d0);
       color: black;
     }
-
     .video-section {
       flex-grow: 1;
-      margin-left: 200px;
-      margin-right: 10px;
+      margin-left: 40px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
     }
-
-    .video-section h2 {
-      font-size: 1.2em;
-      margin-bottom: 15px;
-    }
-
     .video-box {
       width: 900px;
       height: 450px;
@@ -81,7 +63,6 @@
       overflow: hidden;
       position: relative;
     }
-
     .video-box video {
       width: auto; 
       height: auto;
@@ -90,7 +71,6 @@
       display: none;
       object-fit: contain;
     }
-
     #overlayCanvas {
       position: absolute;
       top: 0;
@@ -100,12 +80,10 @@
       pointer-events: none;
       display: none;
     }
-
     .placeholder {
       color: gray;
       position: absolute;
     }
-
     #alertMessage {
       display: block;
       position: fixed;
@@ -124,24 +102,14 @@
   </style>
 </head>
 <body>
-  <!-- ALERT MESSAGE -->
   <div id="alertMessage"></div>
-
-  <h1>AI RECOGNITION</h1>
+  <h1>AI Live Face Recognition</h1>
   <div class="container">
-    <!-- Left panel -->
     <div class="controls">
-      <!-- Live Webcam -->
-      <div class="section-title">Live Webcam</div>
-      <div style="margin-left:5px;">
-        <button id="startBtn">Start</button>
-        <button id="stopBtn">Stop</button>
-      </div>
+      <button id="startBtn">Start Webcam</button>
+      <button id="stopBtn">Stop Webcam</button>
     </div>
-
-    <!-- Right panel -->
     <div class="video-section">
-      <h2>AI Detector</h2>
       <div class="video-box">
         <span class="placeholder">[ Live webcam will appear here ]</span>
         <video id="webcam" autoplay playsinline></video>
@@ -204,10 +172,15 @@ async function sendImageToBackend(file){
   const formData = new FormData();
   formData.append("image", file);
   try {
-    const res = await fetch("/recognize", { method: "POST", body: formData });
+    const res = await fetch("http://127.0.0.1:5000/recognize", { 
+      method: "POST", 
+      body: formData 
+    });
+    if (!res.ok) throw new Error("Server returned " + res.status);
     const data = await res.json();
     return data.faces || [];
   } catch(err) {
+    console.error(err);
     showAlert("Backend error: " + err.message);
     return [];
   }
@@ -231,23 +204,31 @@ startBtn.addEventListener("click", async () => {
 
     const processWebcam = async () => {
       if(!isWebcamRunning) return;
+
       if (webcam.videoWidth === 0 || webcam.videoHeight === 0) {
         requestAnimationFrame(processWebcam);
         return;
       }
 
+      // Create frame snapshot
       const canvas = document.createElement("canvas");
       canvas.width = webcam.videoWidth;
       canvas.height = webcam.videoHeight;
-      canvas.getContext("2d").drawImage(webcam,0,0);
+      const context = canvas.getContext("2d");
+      context.drawImage(webcam,0,0,canvas.width,canvas.height);
 
-      const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg"));
-      const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
+      // Convert frame to blob and send
+      const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg",0.8));
+      if (blob) {
+        const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
+        trackedFaces = faces.length>0 ? faces : trackedFaces;
+        drawBoxes(trackedFaces);
+      }
 
-      trackedFaces = faces.length>0 ? faces : trackedFaces;
-      drawBoxes(trackedFaces);
-      requestAnimationFrame(processWebcam);
+      // Slight frame delay for stability
+      setTimeout(()=> requestAnimationFrame(processWebcam), 120);
     };
+
     requestAnimationFrame(processWebcam);
   } catch(err){
     showAlert("Could not access webcam: " + err.message);
