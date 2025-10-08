@@ -1,4 +1,4 @@
-# app.py (Webcam / Image Detection Backend)
+# app.py (Render Deployment Ready)
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import cv2
@@ -47,7 +47,6 @@ def recognize():
 
     try:
         detections = detector.detect_faces(img_rgb)
-        print(f"[DEBUG] Detections: {len(detections)} face(s)")
     except Exception as e:
         print(f"[ERROR] MTCNN detection failed: {e}")
         detections = []
@@ -113,11 +112,9 @@ def recognize():
             "confidence": round(conf, 2)
         })
 
-    print(f"[DEBUG] Faces returned: {faces_data}")
     return jsonify({"faces": faces_data})
 
 if __name__ == "__main__":
-    # Local testing
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
-    # No need to include app.run() for Render
+    # Use Render's PORT environment variable, default to 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
