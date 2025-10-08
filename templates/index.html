@@ -64,10 +64,10 @@
       position: relative;
     }
     .video-box video {
-      width: auto; 
+      width: auto;
       height: auto;
       max-width: 100%;
-      max-height: 100%; 
+      max-height: 100%;
       display: none;
       object-fit: contain;
     }
@@ -210,14 +210,12 @@ startBtn.addEventListener("click", async () => {
         return;
       }
 
-      // Create frame snapshot
       const canvas = document.createElement("canvas");
       canvas.width = webcam.videoWidth;
       canvas.height = webcam.videoHeight;
       const context = canvas.getContext("2d");
       context.drawImage(webcam,0,0,canvas.width,canvas.height);
 
-      // Convert frame to blob and send
       const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg",0.8));
       if (blob) {
         const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
@@ -225,7 +223,6 @@ startBtn.addEventListener("click", async () => {
         drawBoxes(trackedFaces);
       }
 
-      // Slight frame delay for stability
       setTimeout(()=> requestAnimationFrame(processWebcam), 120);
     };
 
