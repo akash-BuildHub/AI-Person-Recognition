@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: ai-person-recognition
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
-    pythonVersion: 3.10.12

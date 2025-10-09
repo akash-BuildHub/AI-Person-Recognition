@@ -132,7 +132,6 @@ let trackedFaces = [];
 let faceClasses = {};
 let faceCounter = 1;
 
-// ---------- Alert ----------
 function showAlert(msg){
   const alertDiv = document.getElementById("alertMessage");
   alertDiv.textContent = msg;
@@ -140,7 +139,6 @@ function showAlert(msg){
   setTimeout(()=>{ alertDiv.style.top="-50px"; }, 3000);
 }
 
-// ---------- Assign Classes ----------
 function assignClassToFace(face){
   const key = `${Math.round(face.x/25)}-${Math.round(face.y/25)}-${Math.round(face.w/25)}-${Math.round(face.h/25)}`;
   if(faceClasses[key]) return faceClasses[key];
@@ -149,7 +147,6 @@ function assignClassToFace(face){
   return newClass;
 }
 
-// ---------- Draw bounding boxes ----------
 function drawBoxes(faces){
   ctx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
   faces.forEach(face=>{
@@ -167,26 +164,20 @@ function drawBoxes(faces){
   });
 }
 
-// ---------- Send image to backend ----------
 async function sendImageToBackend(file){
   const formData = new FormData();
   formData.append("image", file);
   try {
-    const res = await fetch("http://127.0.0.1:5000/recognize", { 
-      method: "POST", 
-      body: formData 
-    });
+    const res = await fetch("/recognize", { method: "POST", body: formData });
     if (!res.ok) throw new Error("Server returned " + res.status);
     const data = await res.json();
     return data.faces || [];
   } catch(err) {
-    console.error(err);
     showAlert("Backend error: " + err.message);
     return [];
   }
 }
 
-// ---------- Webcam Detection ----------
 startBtn.addEventListener("click", async () => {
   try {
     liveStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -204,25 +195,16 @@ startBtn.addEventListener("click", async () => {
 
     const processWebcam = async () => {
       if(!isWebcamRunning) return;
-
-      if (webcam.videoWidth === 0 || webcam.videoHeight === 0) {
-        requestAnimationFrame(processWebcam);
-        return;
-      }
-
       const canvas = document.createElement("canvas");
       canvas.width = webcam.videoWidth;
       canvas.height = webcam.videoHeight;
-      const context = canvas.getContext("2d");
-      context.drawImage(webcam,0,0,canvas.width,canvas.height);
-
+      canvas.getContext("2d").drawImage(webcam,0,0,canvas.width,canvas.height);
       const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg",0.8));
       if (blob) {
         const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
         trackedFaces = faces.length>0 ? faces : trackedFaces;
         drawBoxes(trackedFaces);
       }
-
       setTimeout(()=> requestAnimationFrame(processWebcam), 120);
     };
 
