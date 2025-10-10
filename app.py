@@ -5,7 +5,6 @@ from flask import Flask, render_template, Response, request, jsonify
 from keras_facenet import FaceNet
 from mtcnn import MTCNN
 from sklearn.preprocessing import Normalizer
-import dlib  # for tracking
 
 # ---------------- Configuration ----------------
 DETECTION_EVERY_N_FRAMES = 3
@@ -26,21 +25,18 @@ detector = MTCNN()
 cap = cv2.VideoCapture(0)
 frame_count = 0
 
-# Face tracking
+# Face tracking using OpenCV trackers
 tracked_faces = []
 trackers = []
 
 def get_faces_and_embeddings(frame):
     faces_data = []
     try:
-        # Resize for faster detection
         small_frame = cv2.resize(frame, (0, 0), fx=DETECTION_SCALE, fy=DETECTION_SCALE)
         results = detector.detect_faces(small_frame)
-
         if len(results) == 0:
             return []
 
-        # Collect all face crops for batch embedding
         faces_to_embed = []
         coords = []
         for res in results:
@@ -86,22 +82,21 @@ def generate_frames():
         # ---- Detection every N frames ----
         if frame_count % DETECTION_EVERY_N_FRAMES == 0:
             tracked_faces = get_faces_and_embeddings(frame_rgb)
-            # Reset trackers
             trackers = []
             for face in tracked_faces:
-                tracker = dlib.correlation_tracker()
-                rect = dlib.rectangle(face["x"], face["y"], face["x"]+face["w"], face["y"]+face["h"])
-                tracker.start_track(frame, rect)
+                x, y, w, h = face["x"], face["y"], face["w"], face["h"]
+                tracker = cv2.TrackerCSRT_create()
+                tracker.init(frame, (x, y, w, h))
                 trackers.append(tracker)
         else:
             # ---- Tracking between detections ----
             new_faces = []
             for i, tracker in enumerate(trackers):
-                tracker.update(frame)
-                pos = tracker.get_position()
-                x, y, w, h = int(pos.left()), int(pos.top()), int(pos.width()), int(pos.height())
-                name = tracked_faces[i]["name"]
-                new_faces.append({"name": name, "x": x, "y": y, "w": w, "h": h})
+                success, bbox = tracker.update(frame)
+                if success:
+                    x, y, w, h = [int(v) for v in bbox]
+                    name = tracked_faces[i]["name"]
+                    new_faces.append({"name": name, "x": x, "y": y, "w": w, "h": h})
             tracked_faces = new_faces
 
         # ---- Draw boxes ----
