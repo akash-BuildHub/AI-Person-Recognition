@@ -1,121 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Live Face Recognition</title>
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
       background-color: black;
       color: white;
-      font-family: "Segoe UI", sans-serif;
-      height: 100vh;
-      overflow: hidden;
-    }
-    h1 {
-      font-size: 3em;
-      font-weight: bold;
-      margin: 30px 0 20px 40px;
-      color: violet;
-    }
-    .container {
-      display: flex;
-      justify-content: flex-start;
-      align-items: flex-start;
-      padding: 20px 40px;
-      box-sizing: border-box;
-      height: calc(100vh - 70px);
-    }
-    .controls {
-      width: 200px;
-      display: flex;
-      flex-direction: column;
-      padding-left: 20px;
-    }
-    button {
-      font-size: 1em;
-      font-weight: bold;
-      padding: 10px 20px;
-      margin: 5px 0;
-      border: none;
-      cursor: pointer;
-      border-radius: 5px;
-      background: linear-gradient(90deg, #c850c0, #4158d0);
-      color: black;
-    }
-    .video-section {
-      flex-grow: 1;
-      margin-left: 40px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
     }
+    h1 { color: violet; margin: 20px; }
     .video-box {
-      width: 900px;
-      height: 450px;
+      position: relative;
+      width: 60%;
+      height: 480px;
       background: #222;
       border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       overflow: hidden;
-      position: relative;
     }
-    .video-box video {
-      width: auto;
-      height: auto;
-      max-width: 100%;
-      max-height: 100%;
-      display: none;
-      object-fit: contain;
-    }
-    #overlayCanvas {
+    video, canvas {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
-      display: none;
-    }
-    .placeholder {
-      color: gray;
-      position: absolute;
+      object-fit: contain;
     }
     #alertMessage {
-      display: block;
       position: fixed;
       top: -50px;
-      left: 0;
       width: 100%;
+      text-align: center;
       background-color: #ff3e3e;
       color: white;
-      text-align: center;
-      padding: 12px 0;
       font-weight: bold;
-      z-index: 1000;
-      font-family: 'Segoe UI', sans-serif;
+      padding: 12px 0;
       transition: top 0.5s ease;
+      z-index: 1000;
+    }
+    .controls { margin: 15px; }
+    button {
+      padding: 10px 20px;
+      margin: 0 10px;
+      font-weight: bold;
+      border: none;
+      border-radius: 5px;
+      background: linear-gradient(90deg,#c850c0,#4158d0);
+      color: black;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
   </style>
 </head>
 <body>
   <div id="alertMessage"></div>
   <h1>AI Live Face Recognition</h1>
-  <div class="container">
-    <div class="controls">
-      <button id="startBtn">Start Webcam</button>
-      <button id="stopBtn">Stop Webcam</button>
-    </div>
-    <div class="video-section">
-      <div class="video-box">
-        <span class="placeholder">[ Live webcam will appear here ]</span>
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="overlayCanvas"></canvas>
-      </div>
-    </div>
+  <div class="controls">
+    <button id="startBtn">Start Webcam</button>
+    <button id="stopBtn" disabled>Stop Webcam</button>
+  </div>
+  <div class="video-box">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="overlayCanvas"></canvas>
   </div>
 
 <script>
@@ -124,108 +78,129 @@ const stopBtn = document.getElementById("stopBtn");
 const webcam = document.getElementById("webcam");
 const overlayCanvas = document.getElementById("overlayCanvas");
 const ctx = overlayCanvas.getContext("2d");
-const placeholder = document.querySelector(".placeholder");
 
-let liveStream = null;
-let isWebcamRunning = false;
+let stream = null;
+let running = false;
+let animationFrameId = null;
 let trackedFaces = [];
-let faceClasses = {};
-let faceCounter = 1;
+const SMOOTHING = 0.4;
 
-function showAlert(msg){
+function showAlert(msg) {
   const alertDiv = document.getElementById("alertMessage");
   alertDiv.textContent = msg;
   alertDiv.style.top = "0";
-  setTimeout(()=>{ alertDiv.style.top="-50px"; }, 3000);
+  setTimeout(() => { alertDiv.style.top = "-50px"; }, 3000);
 }
 
-function assignClassToFace(face){
-  const key = `${Math.round(face.x/25)}-${Math.round(face.y/25)}-${Math.round(face.w/25)}-${Math.round(face.h/25)}`;
-  if(faceClasses[key]) return faceClasses[key];
-  const newClass = "Person " + faceCounter++;
-  faceClasses[key] = newClass;
-  return newClass;
-}
+function drawBoxes(faces) {
+  if (!running) return; // Prevent drawing after stop
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  faces.forEach(face => {
+    const prev = trackedFaces.find(f => f.name === face.name) || {};
+    const x = prev.x !== undefined ? prev.x + SMOOTHING * (face.x - prev.x) : face.x;
+    const y = prev.y !== undefined ? prev.y + SMOOTHING * (face.y - prev.y) : face.y;
+    const w = prev.w !== undefined ? prev.w + SMOOTHING * (face.w - prev.w) : face.w;
+    const h = prev.h !== undefined ? prev.h + SMOOTHING * (face.h - prev.h) : face.h;
 
-function drawBoxes(faces){
-  ctx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
-  faces.forEach(face=>{
-    let {x,y,w,h,name,confidence} = face;
-    let displayName = (!name || name==="Unknown" || (confidence!==undefined && confidence<0.7))
-      ? assignClassToFace(face)
-      : name;
-
-    ctx.strokeStyle = (displayName.startsWith("Person")) ? "#FF3B30" : "#00FF00";
+    ctx.strokeStyle = face.name === "Unknown" ? "red" : "green";
     ctx.lineWidth = 3;
-    ctx.strokeRect(x,y,w,h);
+    ctx.strokeRect(x, y, w, h);
     ctx.fillStyle = ctx.strokeStyle;
     ctx.font = "18px 'Segoe UI'";
-    ctx.fillText(displayName, x, y > 20 ? y-5 : y+20);
+    ctx.fillText(face.name, x, y > 20 ? y - 5 : y + 20);
+
+    face.x = x; face.y = y; face.w = w; face.h = h;
+  });
+  trackedFaces = faces;
+}
+
+async function sendFrameToBackend() {
+  if (!running) return []; // Prevent sending when stopped
+  const canvas = document.createElement("canvas");
+  canvas.width = webcam.videoWidth;
+  canvas.height = webcam.videoHeight;
+  const c = canvas.getContext("2d");
+  c.drawImage(webcam, 0, 0);
+  return new Promise(resolve => {
+    canvas.toBlob(async blob => {
+      if (!running) return resolve([]); // Stop instantly
+      const formData = new FormData();
+      formData.append("image", new File([blob], "frame.jpg", { type: "image/jpeg" }));
+      try {
+        const res = await fetch("/recognize", { method: "POST", body: formData });
+        if (!res.ok) throw new Error("Server returned " + res.status);
+        const data = await res.json();
+        resolve(data.faces || []);
+      } catch (err) {
+        if (running) console.error("Backend error:", err);
+        resolve([]);
+      }
+    }, "image/jpeg", 0.5);
   });
 }
 
-async function sendImageToBackend(file){
-  const formData = new FormData();
-  formData.append("image", file);
+async function processWebcam() {
+  if (!running) return;
+  const faces = await sendFrameToBackend();
+  if (!running) return; // Prevent drawing after stop
+  drawBoxes(faces);
+  animationFrameId = requestAnimationFrame(processWebcam);
+}
+
+async function startWebcam() {
   try {
-    const res = await fetch("/recognize", { method: "POST", body: formData });
-    if (!res.ok) throw new Error("Server returned " + res.status);
-    const data = await res.json();
-    return data.faces || [];
-  } catch(err) {
-    showAlert("Backend error: " + err.message);
-    return [];
+    if (running) return;
+    running = true;
+    trackedFaces = [];
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 },
+      audio: false
+    });
+
+    webcam.srcObject = stream;
+    webcam.onloadedmetadata = () => {
+      overlayCanvas.width = webcam.videoWidth;
+      overlayCanvas.height = webcam.videoHeight;
+      processWebcam();
+    };
+  } catch (err) {
+    showAlert("Cannot access webcam: " + err.message);
+    running = false;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
   }
 }
 
-startBtn.addEventListener("click", async () => {
-  try {
-    liveStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    webcam.srcObject = liveStream;
-    webcam.style.display = "block";
-    placeholder.style.display = "none";
+function stopWebcam() {
+  if (!running) return;
+  running = false;
 
-    webcam.onloadedmetadata = () => {
-      overlayCanvas.width = webcam.videoWidth || 640;
-      overlayCanvas.height = webcam.videoHeight || 480;
-      overlayCanvas.style.display = "block";
-    };
+  // Stop rendering loop first
+  cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
 
-    isWebcamRunning = true;
-
-    const processWebcam = async () => {
-      if(!isWebcamRunning) return;
-      const canvas = document.createElement("canvas");
-      canvas.width = webcam.videoWidth;
-      canvas.height = webcam.videoHeight;
-      canvas.getContext("2d").drawImage(webcam,0,0,canvas.width,canvas.height);
-      const blob = await new Promise(res=>canvas.toBlob(res,"image/jpeg",0.8));
-      if (blob) {
-        const faces = await sendImageToBackend(new File([blob],"webcam.jpg",{type:"image/jpeg"}));
-        trackedFaces = faces.length>0 ? faces : trackedFaces;
-        drawBoxes(trackedFaces);
-      }
-      setTimeout(()=> requestAnimationFrame(processWebcam), 120);
-    };
-
-    requestAnimationFrame(processWebcam);
-  } catch(err){
-    showAlert("Could not access webcam: " + err.message);
-  }
-});
-
-stopBtn.addEventListener("click", () => {
-  if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
-  webcam.srcObject = null;
-  webcam.style.display = "none";
-  overlayCanvas.style.display = "none";
-  placeholder.style.display = "block";
-  ctx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
+  // Immediately clear everything
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   trackedFaces = [];
-  faceClasses = {};
-  faceCounter = 1;
-  isWebcamRunning = false;
-});
+
+  // Stop webcam stream completely
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+
+  webcam.srcObject = null;
+
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+}
+ 
+startBtn.addEventListener("click", startWebcam);
+stopBtn.addEventListener("click", stopWebcam);
 </script>
+
 </body>
 </html>
