@@ -7,7 +7,7 @@ from sklearn.svm import SVC
 import pickle
 from mtcnn import MTCNN
 
-DATA_DIR = "data"  # your dataset folder
+DATA_DIR = "data"
 embedder = FaceNet()
 detector = MTCNN()
 

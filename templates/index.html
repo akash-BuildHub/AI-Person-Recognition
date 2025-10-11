@@ -1,63 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Live Face Recognition</title>
   <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background-color: black;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+    body { margin: 0; font-family: 'Segoe UI', sans-serif; background-color: black; color: white; display: flex; flex-direction: column; align-items: center; }
     h1 { color: violet; margin: 20px; }
-    .video-box {
-      position: relative;
-      width: 60%;
-      height: 480px;
-      background: #222;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    video, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    #alertMessage {
-      position: fixed;
-      top: -50px;
-      width: 100%;
-      text-align: center;
-      background-color: #ff3e3e;
-      color: white;
-      font-weight: bold;
-      padding: 12px 0;
-      transition: top 0.5s ease;
-      z-index: 1000;
-    }
+    .video-box { position: relative; width: 60%; height: 480px; background: #222; border-radius: 10px; overflow: hidden; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+    #alertMessage { position: fixed; top: -50px; width: 100%; text-align: center; background-color: #ff3e3e; color: white; font-weight: bold; padding: 12px 0; transition: top 0.5s ease; z-index: 1000; }
     .controls { margin: 15px; }
-    button {
-      padding: 10px 20px;
-      margin: 0 10px;
-      font-weight: bold;
-      border: none;
-      border-radius: 5px;
-      background: linear-gradient(90deg,#c850c0,#4158d0);
-      color: black;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+    button { padding: 10px 20px; margin: 0 10px; font-weight: bold; border: none; border-radius: 5px; background: linear-gradient(90deg,#c850c0,#4158d0); color: black; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -93,7 +48,7 @@ function showAlert(msg) {
 }
 
 function drawBoxes(faces) {
-  if (!running) return; // Prevent drawing after stop
+  if (!running) return;
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   faces.forEach(face => {
     const prev = trackedFaces.find(f => f.name === face.name) || {};
@@ -115,7 +70,7 @@ function drawBoxes(faces) {
 }
 
 async function sendFrameToBackend() {
-  if (!running) return []; // Prevent sending when stopped
+  if (!running) return [];
   const canvas = document.createElement("canvas");
   canvas.width = webcam.videoWidth;
   canvas.height = webcam.videoHeight;
@@ -123,12 +78,11 @@ async function sendFrameToBackend() {
   c.drawImage(webcam, 0, 0);
   return new Promise(resolve => {
     canvas.toBlob(async blob => {
-      if (!running) return resolve([]); // Stop instantly
+      if (!running) return resolve([]);
       const formData = new FormData();
       formData.append("image", new File([blob], "frame.jpg", { type: "image/jpeg" }));
       try {
         const res = await fetch("/recognize", { method: "POST", body: formData });
-        if (!res.ok) throw new Error("Server returned " + res.status);
         const data = await res.json();
         resolve(data.faces || []);
       } catch (err) {
@@ -142,7 +96,7 @@ async function sendFrameToBackend() {
 async function processWebcam() {
   if (!running) return;
   const faces = await sendFrameToBackend();
-  if (!running) return; // Prevent drawing after stop
+  if (!running) return;
   drawBoxes(faces);
   animationFrameId = requestAnimationFrame(processWebcam);
 }
@@ -154,12 +108,7 @@ async function startWebcam() {
     trackedFaces = [];
     startBtn.disabled = true;
     stopBtn.disabled = false;
-
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480 },
-      audio: false
-    });
-
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
     webcam.srcObject = stream;
     webcam.onloadedmetadata = () => {
       overlayCanvas.width = webcam.videoWidth;
@@ -177,30 +126,21 @@ async function startWebcam() {
 function stopWebcam() {
   if (!running) return;
   running = false;
-
-  // Stop rendering loop first
   cancelAnimationFrame(animationFrameId);
   animationFrameId = null;
-
-  // Immediately clear everything
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   trackedFaces = [];
-
-  // Stop webcam stream completely
   if (stream) {
     stream.getTracks().forEach(track => track.stop());
     stream = null;
   }
-
   webcam.srcObject = null;
-
   startBtn.disabled = false;
   stopBtn.disabled = true;
 }
- 
+
 startBtn.addEventListener("click", startWebcam);
 stopBtn.addEventListener("click", stopWebcam);
 </script>
-
 </body>
 </html>

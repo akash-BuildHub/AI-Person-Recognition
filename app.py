@@ -1,15 +1,14 @@
 import cv2
 import numpy as np
 import pickle
-from flask import Flask, render_template, Response, request, jsonify
+from flask import Flask, render_template, request, jsonify
 from keras_facenet import FaceNet
 from mtcnn import MTCNN
 from sklearn.preprocessing import Normalizer
 
 # ---------------- Configuration ----------------
-DETECTION_EVERY_N_FRAMES = 3
 CONFIDENCE_THRESHOLD = 0.75
-DETECTION_SCALE = 0.5  # scale down frame for faster MTCNN
+DETECTION_SCALE = 0.5
 # ------------------------------------------------
 
 app = Flask(__name__)
@@ -20,14 +19,6 @@ with open("embeddings.pkl", "rb") as f:
 
 embedder = FaceNet()
 detector = MTCNN()
-
-# Video capture
-cap = cv2.VideoCapture(0)
-frame_count = 0
-
-# Face tracking using OpenCV trackers
-tracked_faces = []
-trackers = []
 
 def get_faces_and_embeddings(frame):
     faces_data = []
@@ -70,56 +61,9 @@ def get_faces_and_embeddings(frame):
 
     return faces_data
 
-def generate_frames():
-    global frame_count, tracked_faces, trackers
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_count += 1
-
-        # ---- Detection every N frames ----
-        if frame_count % DETECTION_EVERY_N_FRAMES == 0:
-            tracked_faces = get_faces_and_embeddings(frame_rgb)
-            trackers = []
-            for face in tracked_faces:
-                x, y, w, h = face["x"], face["y"], face["w"], face["h"]
-                tracker = cv2.TrackerCSRT_create()
-                tracker.init(frame, (x, y, w, h))
-                trackers.append(tracker)
-        else:
-            # ---- Tracking between detections ----
-            new_faces = []
-            for i, tracker in enumerate(trackers):
-                success, bbox = tracker.update(frame)
-                if success:
-                    x, y, w, h = [int(v) for v in bbox]
-                    name = tracked_faces[i]["name"]
-                    new_faces.append({"name": name, "x": x, "y": y, "w": w, "h": h})
-            tracked_faces = new_faces
-
-        # ---- Draw boxes ----
-        for face in tracked_faces:
-            x, y, w, h = face["x"], face["y"], face["w"], face["h"]
-            color = (0, 255, 0) if face["name"] != "Unknown" else (0, 0, 255)
-            cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-            cv2.putText(frame, face["name"], (x, y-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/recognize', methods=['POST'])
 def recognize():
@@ -133,4 +77,5 @@ def recognize():
     return jsonify({"faces": faces})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=5000)
