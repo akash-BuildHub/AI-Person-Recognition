@@ -134,6 +134,10 @@
     const SMOOTHING = 0.4;
     const DETECTION_INTERVAL = 150;
 
+    // ✅ FIXED: Use absolute paths for Render deployment
+    const MODEL_URL = `${window.location.origin}/models`;
+    const DATA_URL = `${window.location.origin}/data`;
+
     // Alert system
     function showAlert(msg) {
       const alertDiv = document.getElementById("alertMessage");
@@ -142,18 +146,18 @@
       setTimeout(() => { alertDiv.style.top = "-50px"; }, 3000);
     }
 
-    // Load face-api.js models - FIXED PATHS
+    // Load face-api.js models - ✅ FIXED PATHS FOR RENDER
     async function loadModels() {
       try {
-        console.log('Loading face detection models...');
-        modelStatus.innerHTML = '<span class="loading"></span> Loading face detection models...';
+        console.log('Loading face detection models from:', MODEL_URL);
+        modelStatus.innerHTML = '<span class="loading"></span> Loading AI models...';
         
-        // FIX: Use relative paths without leading slash
-        await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
-        await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
-        await faceapi.nets.faceRecognitionNet.loadFromUri('./models');
+        // ✅ FIXED: Use absolute paths for Render
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
         
-        console.log('All models loaded successfully');
+        console.log('✅ All models loaded successfully');
         modelStatus.innerHTML = '✅ AI Models loaded successfully!';
         showAlert('AI models loaded successfully!');
         
@@ -161,13 +165,13 @@
         await trainFaceRecognizer();
         
       } catch (error) {
-        console.error('Error loading models:', error);
+        console.error('❌ Error loading models:', error);
         modelStatus.innerHTML = '❌ Failed to load models';
         showAlert('Failed to load AI models. Check browser console for details.');
       }
     }
 
-    // Train face recognizer with known faces
+    // Train face recognizer with known faces - ✅ FIXED PATHS FOR RENDER
     async function trainFaceRecognizer() {
       try {
         console.log('Training face recognizer...');
@@ -178,9 +182,10 @@
         const labeledFaceDescriptors = await Promise.all(
           labels.map(async label => {
             try {
-              // FIX: Use relative paths for images
-              const imgUrl = `./data/${label}/0.jpg`;
-              console.log(`Loading image: ${imgUrl}`);
+              // ✅ FIXED: Use absolute paths for Render
+              const imgUrl = `${DATA_URL}/${label}/0.jpg`;
+              console.log(`Loading training image: ${imgUrl}`);
+              
               const img = await faceapi.fetchImage(imgUrl);
               
               const detection = await faceapi
@@ -193,9 +198,10 @@
                 return null;
               }
               
+              console.log(`✅ Successfully trained: ${label}`);
               return new faceapi.LabeledFaceDescriptors(label, [detection.descriptor]);
             } catch (error) {
-              console.warn(`Error loading image for ${label}:`, error);
+              console.warn(`❌ Error loading image for ${label}:`, error);
               return null;
             }
           })
@@ -211,11 +217,12 @@
         }
         
         faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.6);
-        console.log(`Face recognizer trained with ${validDescriptors.length} persons`);
+        console.log(`✅ Face recognizer trained with ${validDescriptors.length} persons`);
         modelStatus.innerHTML = `✅ Trained with ${validDescriptors.length} persons`;
+        showAlert(`Face recognition trained with ${validDescriptors.length} known persons`);
         
       } catch (error) {
-        console.error('Error training face recognizer:', error);
+        console.error('❌ Error training face recognizer:', error);
         modelStatus.innerHTML = '❌ Face training failed';
       }
     }
@@ -336,7 +343,7 @@
           overlayCanvas.width = webcam.videoWidth;
           overlayCanvas.height = webcam.videoHeight;
           
-          console.log('Webcam started, starting face detection...');
+          console.log('🎥 Webcam started, starting face detection...');
           // Start face detection
           detectFaces();
         };
@@ -376,7 +383,10 @@
 
     // Initialize the application
     window.addEventListener('load', async () => {
-      console.log('Page loaded, initializing face recognition...');
+      console.log('🚀 Page loaded, initializing face recognition...');
+      console.log('📍 Current origin:', window.location.origin);
+      console.log('📁 Models URL:', MODEL_URL);
+      console.log('📁 Data URL:', DATA_URL);
       await loadModels();
     });
 
