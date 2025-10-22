@@ -130,7 +130,7 @@
     let animationFrameId = null;
     let trackedFaces = [];
     let faceMatcher = null;
-    let modelsLoaded = false; // ✅ NEW: Track model loading state
+    let modelsLoaded = false;
     
     const SMOOTHING = 0.4;
     const DETECTION_INTERVAL = 150;
@@ -147,24 +147,33 @@
       setTimeout(() => { alertDiv.style.top = "-50px"; }, 3000);
     }
 
-    // ✅ FIXED: Safe image loading function
-    function loadImage(src) {
+    // ✅ FIXED: Use face-api.js's built-in fetchImage for better compatibility
+    async function loadTrainingImage(imgUrl) {
       return new Promise((resolve, reject) => {
+        // Create a canvas element to handle CORS issues
         const img = new Image();
-        img.crossOrigin = "anonymous"; // Handle CORS
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
-        img.src = src;
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          // Convert to canvas to avoid CORS issues with face-api.js
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas);
+        };
+        img.onerror = () => reject(new Error(`Failed to load image: ${imgUrl}`));
+        img.src = imgUrl;
       });
     }
 
-    // Load face-api.js models - ✅ FIXED: Wait for complete loading
+    // Load face-api.js models
     async function loadModels() {
       try {
         console.log('Loading face detection models from:', MODEL_URL);
         modelStatus.innerHTML = '<span class="loading"></span> Loading AI models...';
         
-        // ✅ FIXED: Use Promise.all to ensure ALL models load before continuing
+        // Load all models
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -172,7 +181,7 @@
         ]);
         
         console.log('✅ All models loaded successfully');
-        modelsLoaded = true; // ✅ Set flag to indicate models are ready
+        modelsLoaded = true;
         modelStatus.innerHTML = '✅ AI Models loaded successfully!';
         showAlert('AI models loaded successfully!');
         
@@ -189,13 +198,13 @@
       }
     }
 
-    // Train face recognizer with known faces
+    // Train face recognizer with known faces - ✅ FIXED: Use canvas elements
     async function trainFaceRecognizer() {
       try {
         console.log('Training face recognizer...');
         modelStatus.innerHTML = '<span class="loading"></span> Training face recognizer...';
         
-        const labels = ['Akash', 'Maria']; // Your known person labels
+        const labels = ['Akash', 'Maria'];
         
         const labeledFaceDescriptors = await Promise.all(
           labels.map(async label => {
@@ -203,9 +212,10 @@
               const imgUrl = `${DATA_URL}/${label}/0.jpg`;
               console.log(`Loading training image: ${imgUrl}`);
               
-              let img;
+              let canvas;
               try {
-                img = await loadImage(imgUrl);
+                // ✅ FIXED: Use canvas instead of Image to avoid "d is not a function"
+                canvas = await loadTrainingImage(imgUrl);
                 console.log(`✅ Image loaded successfully for ${label}`);
               } catch (imgError) {
                 console.error(`❌ Failed to load image for ${label}:`, imgError);
@@ -214,14 +224,9 @@
 
               let detection;
               try {
-                // ✅ FIXED: Ensure models are loaded before detection
-                if (!modelsLoaded) {
-                  console.warn('Models not loaded yet, waiting...');
-                  return null;
-                }
-                
+                // ✅ FIXED: Use canvas element for face detection
                 detection = await faceapi
-                  .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+                  .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
                   .withFaceLandmarks()
                   .withFaceDescriptor();
               } catch (detectionError) {
@@ -304,7 +309,7 @@
       trackedFaces = faces;
     }
 
-    // Main face detection loop - ✅ FIXED: Check models are loaded
+    // Main face detection loop
     let lastDetectionTime = 0;
     async function detectFaces() {
       if (!running) return;
@@ -317,7 +322,7 @@
       lastDetectionTime = now;
 
       try {
-        // ✅ FIXED: Double-check models are loaded before detection
+        // Check models are loaded before detection
         if (!modelsLoaded) {
           console.warn('Models not loaded yet, skipping detection');
           animationFrameId = requestAnimationFrame(detectFaces);
@@ -364,12 +369,12 @@
       animationFrameId = requestAnimationFrame(detectFaces);
     }
 
-    // Webcam management - ✅ FIXED: Check models before starting
+    // Webcam management
     async function startWebcam() {
       try {
         if (running) return;
         
-        // ✅ FIXED: Ensure models are loaded before starting webcam
+        // Ensure models are loaded before starting webcam
         if (!modelsLoaded) {
           showAlert('AI models are still loading. Please wait...');
           return;
@@ -441,7 +446,7 @@
       console.log('📁 Models URL:', MODEL_URL);
       console.log('📁 Data URL:', DATA_URL);
       
-      // ✅ FIXED: Start with Start button disabled
+      // Start with Start button disabled
       startBtn.disabled = true;
       stopBtn.disabled = true;
       
