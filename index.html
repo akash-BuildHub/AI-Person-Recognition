@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Live Face Recognition</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    body { 
+      margin: 0; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background-color: black; 
+      color: white; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+    }
+    
+    h1 { 
+      color: violet; 
+      margin: 20px; 
+    }
+    
+    .video-box { 
+      position: relative; 
+      width: 60%; 
+      height: 480px; 
+      background: #222; 
+      border-radius: 10px; 
+      overflow: hidden; 
+    }
+    
+    video, canvas { 
+      position: absolute; 
+      top: 0; 
+      left: 0; 
+      width: 100%; 
+      height: 100%; 
+      object-fit: contain; 
+    }
+    
+    #alertMessage { 
+      position: fixed; 
+      top: -50px; 
+      width: 100%; 
+      text-align: center; 
+      background-color: #ff3e3e; 
+      color: white; 
+      font-weight: bold; 
+      padding: 12px 0; 
+      transition: top 0.5s ease; 
+      z-index: 1000; 
+    }
+    
+    .controls { 
+      margin: 15px; 
+    }
+    
+    button { 
+      padding: 10px 20px; 
+      margin: 0 10px; 
+      font-weight: bold; 
+      border: none; 
+      border-radius: 5px; 
+      background: linear-gradient(90deg,#c850c0,#4158d0); 
+      color: black; 
+      cursor: pointer; 
+    }
+    
+    button:disabled { 
+      opacity: 0.6; 
+      cursor: not-allowed; 
+    }
+  </style>
+</head>
+<body>
+  <div id="alertMessage"></div>
+  <h1>AI Live Face Recognition</h1>
+  
+  <div class="controls">
+    <button id="startBtn">Start Webcam</button>
+    <button id="stopBtn" disabled>Stop Webcam</button>
+  </div>
+  
+  <div class="video-box">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="overlayCanvas"></canvas>
+  </div>
+
+  <script>
+    // DOM Elements
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const webcam = document.getElementById("webcam");
+    const overlayCanvas = document.getElementById("overlayCanvas");
+    const ctx = overlayCanvas.getContext("2d");
+
+    // Global variables
+    let stream = null;
+    let running = false;
+    let animationFrameId = null;
+    let trackedFaces = [];
+    let faceMatcher = null;
+    
+    const SMOOTHING = 0.4;
+    const DETECTION_INTERVAL = 150; // ms between face detections
+
+    // Alert system
+    function showAlert(msg) {
+      const alertDiv = document.getElementById("alertMessage");
+      alertDiv.textContent = msg;
+      alertDiv.style.top = "0";
+      setTimeout(() => { alertDiv.style.top = "-50px"; }, 3000);
+    }
+
+    // Load face-api.js models
+    async function loadModels() {
+      try {
+        console.log('Loading face detection models...');
+        
+        // Load models from local models directory
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+        await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+        await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+        
+        console.log('All models loaded successfully');
+        showAlert('AI models loaded successfully!');
+        
+        // Train face recognizer with known faces
+        await trainFaceRecognizer();
+        
+      } catch (error) {
+        console.error('Error loading models:', error);
+        showAlert('Failed to load AI models. Please check console for details.');
+      }
+    }
+
+    // Train face recognizer with known faces
+    async function trainFaceRecognizer() {
+      try {
+        console.log('Training face recognizer...');
+        
+        const labels = ['Akash', 'Maria']; // Add your known person labels here
+        
+        const labeledFaceDescriptors = await Promise.all(
+          labels.map(async label => {
+            try {
+              // Load reference images for each person
+              const imgUrl = `./data/${label}/0.jpg`;
+              const img = await faceapi.fetchImage(imgUrl);
+              
+              // Detect face and compute descriptor
+              const detection = await faceapi
+                .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+              
+              if (!detection) {
+                console.warn(`No face detected in reference image for ${label}`);
+                return null;
+              }
+              
+              return new faceapi.LabeledFaceDescriptors(label, [detection.descriptor]);
+            } catch (error) {
+              console.warn(`Error loading image for ${label}:`, error);
+              return null;
+            }
+          })
+        );
+
+        // Filter out null results
+        const validDescriptors = labeledFaceDescriptors.filter(desc => desc !== null);
+        
+        if (validDescriptors.length === 0) {
+          console.warn('No valid face descriptors found in training data');
+          return;
+        }
+        
+        faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.6);
+        console.log(`Face recognizer trained with ${validDescriptors.length} persons`);
+        
+      } catch (error) {
+        console.error('Error training face recognizer:', error);
+      }
+    }
+
+    // Draw bounding boxes and labels
+    function drawBoxes(faces) {
+      if (!running) return;
+      
+      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      
+      faces.forEach(face => {
+        // Smooth the box coordinates
+        const prev = trackedFaces.find(f => f.name === face.name && Math.abs(f.x - face.x) < 50) || {};
+        const x = prev.x !== undefined ? prev.x + SMOOTHING * (face.x - prev.x) : face.x;
+        const y = prev.y !== undefined ? prev.y + SMOOTHING * (face.y - prev.y) : face.y;
+        const w = prev.w !== undefined ? prev.w + SMOOTHING * (face.w - prev.w) : face.w;
+        const h = prev.h !== undefined ? prev.h + SMOOTHING * (face.h - prev.h) : face.h;
+
+        // Set colors: Green for known, Red for unknown
+        const isKnown = face.name !== "unknown";
+        ctx.strokeStyle = isKnown ? "green" : "red";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, w, h);
+        
+        // Draw label background
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.font = "bold 18px 'Segoe UI'";
+        const textWidth = ctx.measureText(face.name).width;
+        const textX = x > 10 ? x : 10;
+        const textY = y > 25 ? y - 8 : y + 25;
+        
+        // Draw label with background
+        ctx.fillRect(textX - 5, textY - 20, textWidth + 10, 25);
+        ctx.fillStyle = "white";
+        ctx.fillText(face.name, textX, textY);
+
+        // Update tracked face with smoothed coordinates
+        face.x = x; face.y = y; face.w = w; face.h = h;
+      });
+      
+      trackedFaces = faces;
+    }
+
+    // Main face detection loop
+    let lastDetectionTime = 0;
+    async function detectFaces() {
+      if (!running) return;
+      
+      const now = Date.now();
+      if (now - lastDetectionTime < DETECTION_INTERVAL) {
+        animationFrameId = requestAnimationFrame(detectFaces);
+        return;
+      }
+      lastDetectionTime = now;
+
+      try {
+        // Detect all faces
+        const detections = await faceapi
+          .detectAllFaces(webcam, new faceapi.TinyFaceDetectorOptions({ 
+            inputSize: 320, 
+            scoreThreshold: 0.5 
+          }))
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        const faces = detections.map(detection => {
+          let name = "unknown";
+          
+          // Use face matcher if available
+          if (faceMatcher) {
+            const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
+            name = bestMatch.label;
+          }
+          
+          const box = detection.detection.box;
+          return {
+            name: name,
+            x: box.x,
+            y: box.y,
+            w: box.width,
+            h: box.height
+          };
+        });
+
+        drawBoxes(faces);
+      } catch (error) {
+        console.error('Face detection error:', error);
+      }
+
+      animationFrameId = requestAnimationFrame(detectFaces);
+    }
+
+    // Webcam management
+    async function startWebcam() {
+      try {
+        if (running) return;
+        
+        running = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        trackedFaces = [];
+        
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 640 }, 
+            height: { ideal: 480 },
+            facingMode: "user" 
+          }, 
+          audio: false 
+        });
+        
+        webcam.srcObject = stream;
+        
+        webcam.onloadedmetadata = () => {
+          // Set canvas size to match video
+          overlayCanvas.width = webcam.videoWidth;
+          overlayCanvas.height = webcam.videoHeight;
+          
+          // Start face detection
+          detectFaces();
+        };
+        
+      } catch (err) {
+        console.error('Webcam error:', err);
+        showAlert('Cannot access webcam: ' + err.message);
+        running = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    }
+
+    function stopWebcam() {
+      if (!running) return;
+      
+      running = false;
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+      
+      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      trackedFaces = [];
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      
+      webcam.srcObject = null;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+
+    // Event listeners
+    startBtn.addEventListener("click", startWebcam);
+    stopBtn.addEventListener("click", stopWebcam);
+
+    // Initialize the application
+    window.addEventListener('load', async () => {
+      await loadModels();
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      stopWebcam();
+    });
+  </script>
+</body>
+</html>
