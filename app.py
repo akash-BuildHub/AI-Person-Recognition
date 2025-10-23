@@ -5,10 +5,11 @@ import numpy as np
 import os
 import logging
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
 # Configuration
@@ -16,8 +17,6 @@ KNOWN_FACES_DIR = "data"
 TOLERANCE = 0.6
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
-
-os.makedirs(KNOWN_FACES_DIR, exist_ok=True)
 
 # Global variables
 known_face_encodings = []
@@ -29,16 +28,16 @@ def train_face_recognition():
     known_face_encodings = []
     known_face_names = []
     
-    logger.info("Training face recognition model...")
+    logger.info("🔍 Training face recognition model...")
     
     try:
         import face_recognition
     except ImportError:
-        logger.error("face_recognition library not installed.")
+        logger.error("❌ face_recognition library not installed.")
         return False
     
     if not os.path.exists(KNOWN_FACES_DIR):
-        logger.warning(f"Directory {KNOWN_FACES_DIR} not found")
+        logger.warning(f"📁 Directory {KNOWN_FACES_DIR} not found")
         return True
     
     for person_name in os.listdir(KNOWN_FACES_DIR):
@@ -47,7 +46,7 @@ def train_face_recognition():
         if not os.path.isdir(person_dir):
             continue
             
-        logger.info(f"Training on {person_name}...")
+        logger.info(f"👤 Training on {person_name}...")
         
         for filename in os.listdir(person_dir):
             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -60,14 +59,14 @@ def train_face_recognition():
                     if len(face_encodings) > 0:
                         known_face_encodings.append(face_encodings[0])
                         known_face_names.append(person_name)
-                        logger.info(f"Learned face from {filename}")
+                        logger.info(f"✅ Learned face from {filename}")
                     else:
-                        logger.warning(f"No face found in {filename}")
+                        logger.warning(f"⚠️ No face found in {filename}")
                         
                 except Exception as e:
-                    logger.error(f"Error processing {filename}: {str(e)}")
+                    logger.error(f"❌ Error processing {filename}: {str(e)}")
     
-    logger.info(f"Training complete! Learned {len(known_face_names)} faces for {len(set(known_face_names))} people")
+    logger.info(f"✅ Training complete! Learned {len(known_face_names)} faces for {len(set(known_face_names))} people")
     return True
 
 def recognize_faces(frame):
@@ -108,25 +107,26 @@ def recognize_faces(frame):
     
     return faces_data
 
-# ✅ ADDED: Serve the main HTML page
+# Serve the main HTML page
 @app.route('/')
 def serve_index():
     return send_from_directory('.', 'index.html')
 
-# ✅ ADDED: Serve CSS and JS files
-@app.route('/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('.', filename)
+# Serve static files (CSS, JS)
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory('.', path)
 
 @app.route('/train', methods=['GET', 'POST'])
 def train_model():
+    """Train or retrain the face recognition model"""
     try:
         success = train_face_recognition()
         if success:
             return jsonify({
                 "status": "success",
                 "message": f"Model trained with {len(known_face_names)} faces",
-                "face_count": len(known_face_names),
+                "face_count": len(known_face_encodings),
                 "people_count": len(set(known_face_names))
             })
         else:
@@ -143,6 +143,7 @@ def train_model():
 
 @app.route('/detect', methods=['POST'])
 def detect_faces():
+    """Detect and recognize faces in an uploaded frame"""
     try:
         if 'frame' not in request.files:
             return jsonify({"error": "No frame provided"}), 400
@@ -170,10 +171,15 @@ def detect_faces():
             "message": f"Detection failed: {str(e)}"
         }), 500
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render"""
+    return jsonify({"status": "healthy", "message": "AI Face Recognition API is running"})
+
 if __name__ == '__main__':
     train_face_recognition()
-    print("🚀 Starting AI Live Face Recognition Server...")
-    print("📁 Data directory:", KNOWN_FACES_DIR)
-    print("🔗 Server running at http://localhost:5000")
-    print("🌐 Open http://localhost:5000 in your browser")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting AI Live Face Recognition Server...")
+    print(f"📁 Data directory: {KNOWN_FACES_DIR}")
+    print(f"🔗 Server running on port: {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)

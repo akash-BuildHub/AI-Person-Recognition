@@ -16,7 +16,7 @@ let modelsLoaded = false;
 const SMOOTHING = 0.4;
 const DETECTION_INTERVAL = 150;
 
-// ✅ FIXED: Use the same origin since Flask now serves the HTML
+// ✅ For Render: Use current origin (will work both locally and on Render)
 const BACKEND_URL = window.location.origin;
 
 // Alert system
