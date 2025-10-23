@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import os
 import logging
+import pickle
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,6 +15,7 @@ CORS(app)
 
 # Configuration
 KNOWN_FACES_DIR = "data"
+ENCODINGS_FILE = "face_encodings.pkl"
 TOLERANCE = 0.6
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
@@ -22,9 +24,24 @@ FRAME_HEIGHT = 480
 known_face_encodings = []
 known_face_names = []
 
-def train_face_recognition():
+def train_face_recognition(force_retrain=False):
     global known_face_encodings, known_face_names
     
+    # Try to load from cache first
+    if not force_retrain and os.path.exists(ENCODINGS_FILE):
+        try:
+            logger.info("🔍 Loading cached face encodings...")
+            with open(ENCODINGS_FILE, "rb") as f:
+                cache_data = pickle.load(f)
+                known_face_encodings = cache_data['encodings']
+                known_face_names = cache_data['names']
+            
+            logger.info(f"✅ Loaded {len(known_face_encodings)} face encodings from cache")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load cache, retraining: {str(e)}")
+    
+    # If cache doesn't exist or loading failed, train from images
     known_face_encodings = []
     known_face_names = []
     
@@ -66,6 +83,18 @@ def train_face_recognition():
                 except Exception as e:
                     logger.error(f"❌ Error processing {filename}: {str(e)}")
     
+    # Save to cache for next time
+    try:
+        cache_data = {
+            'encodings': known_face_encodings,
+            'names': known_face_names
+        }
+        with open(ENCODINGS_FILE, "wb") as f:
+            pickle.dump(cache_data, f)
+        logger.info(f"💾 Saved {len(known_face_encodings)} encodings to cache")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not save cache: {str(e)}")
+    
     logger.info(f"✅ Training complete! Learned {len(known_face_names)} faces for {len(set(known_face_names))} people")
     return True
 
@@ -99,8 +128,7 @@ def recognize_faces(frame):
         face_data = {
             "name": name,
             "color": color,
-            "box": [left, top, right - left, bottom - top],
-            "confidence": float(1 - face_distances[best_match_index]) if best_match_index != -1 and name != "unknown" else 0.0
+            "box": [left, top, right - left, bottom - top]
         }
         
         faces_data.append(face_data)
@@ -121,13 +149,20 @@ def serve_static(path):
 def train_model():
     """Train or retrain the face recognition model"""
     try:
-        success = train_face_recognition()
+        force_retrain = request.method == 'POST'
+        success = train_face_recognition(force_retrain=force_retrain)
+        
         if success:
+            people_count = len(set(known_face_names))
+            message = "Model loaded from cache" if not force_retrain and os.path.exists(ENCODINGS_FILE) else "Model trained successfully"
+            
             return jsonify({
                 "status": "success",
-                "message": f"Model trained with {len(known_face_names)} faces",
+                "message": f"{message} with {len(known_face_encodings)} face encodings",
                 "face_count": len(known_face_encodings),
-                "people_count": len(set(known_face_names))
+                "people_count": people_count,
+                "people": list(set(known_face_names)),
+                "from_cache": not force_retrain and os.path.exists(ENCODINGS_FILE)
             })
         else:
             return jsonify({
@@ -171,15 +206,50 @@ def detect_faces():
             "message": f"Detection failed: {str(e)}"
         }), 500
 
+@app.route('/clear_cache', methods=['POST'])
+def clear_cache():
+    """Clear the face encodings cache"""
+    try:
+        if os.path.exists(ENCODINGS_FILE):
+            os.remove(ENCODINGS_FILE)
+            logger.info("🗑️ Cleared face encodings cache")
+            return jsonify({"status": "success", "message": "Cache cleared successfully"})
+        else:
+            return jsonify({"status": "success", "message": "No cache file found"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/stats')
+def get_stats():
+    """Get current model statistics"""
+    cache_exists = os.path.exists(ENCODINGS_FILE)
+    return jsonify({
+        "status": "success",
+        "known_people": len(set(known_face_names)),
+        "total_encodings": len(known_face_encodings),
+        "people_list": list(set(known_face_names)),
+        "cache_loaded": cache_exists,
+        "cache_file": ENCODINGS_FILE if cache_exists else None
+    })
+
 @app.route('/health')
 def health_check():
     """Health check endpoint for Render"""
-    return jsonify({"status": "healthy", "message": "AI Face Recognition API is running"})
+    return jsonify({
+        "status": "healthy", 
+        "message": "AI Face Recognition API is running",
+        "model_loaded": len(known_face_encodings) > 0,
+        "cache_used": os.path.exists(ENCODINGS_FILE)
+    })
 
 if __name__ == '__main__':
-    train_face_recognition()
+    # Load from cache on startup (don't retrain unless cache doesn't exist)
+    train_face_recognition(force_retrain=False)
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Starting AI Live Face Recognition Server...")
     print(f"📁 Data directory: {KNOWN_FACES_DIR}")
+    print(f"💾 Cache file: {ENCODINGS_FILE}")
+    print(f"👤 Known people: {len(set(known_face_names))}")
+    print(f"🔢 Total encodings: {len(known_face_encodings)}")
     print(f"🔗 Server running on port: {port}")
     app.run(host='0.0.0.0', port=port, debug=False)

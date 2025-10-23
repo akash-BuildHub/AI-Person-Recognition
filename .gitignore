@@ -1,12 +1,4 @@
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
 .env
-*.env
-.DS_Store
-*.log
+*.pkl  # But note: we want to include face_encodings.pkl, so we don't ignore it.
