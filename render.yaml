@@ -5,4 +5,3 @@ services:
     plan: free
     buildCommand: "./build.sh"
     startCommand: "python app.py"
-    autoDeploy: true
