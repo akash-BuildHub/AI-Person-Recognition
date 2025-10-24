@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_templates
 from flask_cors import CORS
 import cv2
 import numpy as np
@@ -139,7 +139,7 @@ def recognize_faces(frame):
 # Serve the main HTML page
 @app.route('/')
 def serve_index():
-    return render_template('index.html')
+    return render_templates('index.html')
 
 # Serve static files (CSS, JS)
 @app.route('/static/<path:path>')
