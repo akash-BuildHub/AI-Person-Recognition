@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: ai-face-recognition
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "python app.py"
+    autoDeploy: true
