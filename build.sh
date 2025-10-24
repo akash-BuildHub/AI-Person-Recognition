@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exit immediately if any command fails
+# Exit immediately if a command exits with a non-zero status
 set -o errexit
 
 # Update system packages and install build tools
