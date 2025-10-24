@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, render_templates
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 import cv2
 import numpy as np
@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ✅ CORRECT Flask app configuration
-app = Flask(__name__, static_folder='static', templates_folder='templates')
+app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
 
 # Configuration
@@ -139,7 +139,7 @@ def recognize_faces(frame):
 # Serve the main HTML page
 @app.route('/')
 def serve_index():
-    return render_templates('index.html')
+    return render_template('index.html')
 
 # Serve static files (CSS, JS)
 @app.route('/static/<path:path>')
