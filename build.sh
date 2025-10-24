@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exit immediately on error
+# Exit immediately if a command exits with a non-zero status
 set -o errexit
 
 # Update and install system-level dependencies
