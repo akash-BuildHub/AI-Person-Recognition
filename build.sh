@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Exit immediately if a command exits with a non-zero status
+# Exit immediately on error
 set -o errexit
 
 # Update and install system-level dependencies
 apt-get update
-apt-get install -y cmake build-essential pkg-config
+apt-get install -y cmake build-essential pkg-config libboost-all-dev libssl-dev libffi-dev libjpeg-dev libpng-dev
 
-# Optional (recommended): Install image libraries
-apt-get install -y libjpeg-dev libpng-dev libboost-all-dev
+# Upgrade pip and install setuptools + wheel before installing the main dependencies
+pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies
-pip install --upgrade pip
+# Now install your Python dependencies
 pip install -r requirements.txt
