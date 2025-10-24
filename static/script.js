@@ -10,16 +10,16 @@ const modelStatus = document.getElementById("modelStatus");
 let stream = null;
 let running = false;
 let animationFrameId = null;
-let trackedFaces = new Map(); // Using Map for better tracking
+let trackedFaces = new Map();
 let modelsLoaded = false;
 let faceCounter = 0;
 
-// ⚡ FASTER SETTINGS - Reduced smoothing and faster detection
-const SMOOTHING = 0.2; // Reduced from 0.4 for faster response
-const DETECTION_INTERVAL = 80; // Reduced from 150 for more frequent updates
-const TRACKING_TIMEOUT = 5; // Faster cleanup of old faces
+// Settings
+const SMOOTHING = 0.2;
+const DETECTION_INTERVAL = 80;
+const TRACKING_TIMEOUT = 5;
 
-// ✅ For Render: Use current origin (will work both locally and on Render)
+// Backend URL - will work on both local and Render
 const BACKEND_URL = window.location.origin;
 
 // Alert system
@@ -38,7 +38,7 @@ function distance(p1, p2) {
 // Find the best matching existing face for a new detection
 function findBestMatch(newFace, existingFaces) {
   let bestMatch = null;
-  let bestDistance = 50; // Maximum distance to consider as same face
+  let bestDistance = 50;
   
   const newCenter = {
     x: newFace.x + newFace.w / 2,
@@ -70,9 +70,9 @@ function updateTrackedFaces(newFaces) {
     const bestMatchId = findBestMatch(newFace, trackedFaces);
     
     if (bestMatchId) {
-      // Update existing face with minimal smoothing for faster response
+      // Update existing face
       const existingFace = trackedFaces.get(bestMatchId);
-      existingFace.x = newFace.x; // Direct assignment for maximum speed
+      existingFace.x = newFace.x;
       existingFace.y = newFace.y;
       existingFace.w = newFace.w;
       existingFace.h = newFace.h;
@@ -87,7 +87,7 @@ function updateTrackedFaces(newFaces) {
     }
   });
   
-  // Remove old faces that haven't been seen recently
+  // Remove old faces
   const now = performance.now();
   for (const [id, face] of trackedFaces) {
     if (now - face.lastSeen > TRACKING_TIMEOUT * DETECTION_INTERVAL) {
@@ -98,7 +98,7 @@ function updateTrackedFaces(newFaces) {
   return Array.from(trackedFaces.values());
 }
 
-// Draw bounding boxes and labels - Optimized for speed
+// Draw bounding boxes and labels
 function drawBoxes(faces) {
   if (!running) return;
   
@@ -118,7 +118,7 @@ function drawBoxes(faces) {
     ctx.font = "bold 16px 'Segoe UI', Arial, sans-serif";
     const textWidth = ctx.measureText(label).width;
     
-    // Position label above face, or below if face is at top
+    // Position label
     const textX = Math.max(5, Math.min(face.x, overlayCanvas.width - textWidth - 5));
     const textY = face.y > 25 ? face.y - 8 : face.y + face.h + 20;
     
@@ -132,7 +132,7 @@ function drawBoxes(faces) {
   });
 }
 
-// Main face detection loop - Optimized for speed
+// Main face detection loop
 let lastDetectionTime = 0;
 async function detectFaces() {
   if (!running) return;
@@ -145,16 +145,16 @@ async function detectFaces() {
   lastDetectionTime = now;
 
   try {
-    // Capture frame efficiently
+    // Capture frame
     const canvas = document.createElement("canvas");
     canvas.width = webcam.videoWidth;
     canvas.height = webcam.videoHeight;
     const context = canvas.getContext("2d");
     context.drawImage(webcam, 0, 0, canvas.width, canvas.height);
     
-    // Convert to blob with lower quality for faster transfer
+    // Convert to blob
     const blob = await new Promise(resolve => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.7); // Reduced quality for speed
+      canvas.toBlob(resolve, 'image/jpeg', 0.7);
     });
     
     const formData = new FormData();
@@ -224,7 +224,7 @@ async function startWebcam() {
       video: { 
         width: { ideal: 640 }, 
         height: { ideal: 480 },
-        frameRate: { ideal: 30 }, // Ensure good frame rate
+        frameRate: { ideal: 30 },
         facingMode: "user" 
       }, 
       audio: false 
