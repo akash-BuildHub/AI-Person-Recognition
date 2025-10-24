@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# build.sh
-
-# Exit on error
+# Exit immediately if a command exits with a non-zero status
 set -o errexit
 
-# Modify this line to use the desired Python version
-pyenv install 3.10.8 -s
-pyenv global 3.10.8
+# Update and install system-level dependencies
+apt-get update
+apt-get install -y cmake build-essential pkg-config
 
+# Optional (recommended): Install image libraries
+apt-get install -y libjpeg-dev libpng-dev libboost-all-dev
+
+# Install Python dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
